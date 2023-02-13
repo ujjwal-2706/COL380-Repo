@@ -34,6 +34,7 @@ struct MatrixDimension{
 MatrixDimension readBinaryFile(char* fileName,int bytesize);
 vector<vector<Block>> sparseMultiplication(vector<vector<Block>>& matrix,int n,int m);
 bool compareResults(vector<vector<Block>> result,vector<vector<Block>> original,int n,int m);
+void writeBinaryFile(char* filename,int bytesize,vector<vector<Block>>& outputMatrix,int n,int m,int k);
 
 int main(int argc,char* argv[])
 {
@@ -63,7 +64,7 @@ int main(int argc,char* argv[])
     {
         cout << "Something's wrong" << endl;
     }
-    
+    writeBinaryFile("test1",2,answer,inputfullMatrix.n,inputfullMatrix.m,nonZeroBlocks);
     return 0;
 }
 
@@ -127,7 +128,6 @@ MatrixDimension readBinaryFile(char* fileName,int bytesize)
 vector<vector<Block>> sparseMultiplication(vector<vector<Block>>& matrix,int n,int m)
 {
     vector<vector<Block>> answer(n/m,vector<Block>());
-    // #pragma omp parallel for num_threads(128)
     omp_set_num_threads(128);
     #pragma omp parallel
     {
@@ -156,7 +156,7 @@ vector<vector<Block>> sparseMultiplication(vector<vector<Block>>& matrix,int n,i
                                         for(int imm =0;imm < m;imm++)
                                         {
                                             temp.block[row][col] = Outer(temp.block[row][col],Inner(matrix[i][pointer1].block[row][imm],matrix[k][pointer2].block[col][imm]));
-                                            temp.block[row][col] = min(temp.block[row][col],(1<<16));
+                                            temp.block[row][col] = min(temp.block[row][col],(1<<16)-1);
                                         }
                                     }
                                 }
@@ -219,4 +219,35 @@ bool compareResults(vector<vector<Block>> result,vector<vector<Block>> original,
         }
     }
     return true;
+}
+
+void writeBinaryFile(char* filename,int bytesize,vector<vector<Block>>& outputMatrix,int n,int m,int k)
+{
+    ofstream writefile(filename,ios::out| ios::binary);
+    if(!writefile)
+    {
+        cout << "Cannot open write file!" << endl;
+    }
+    writefile.write((char*) &n,4);
+    writefile.write((char*) &m,4);
+    writefile.write((char*) &k,4);
+    for(int i=0;i < outputMatrix.size();i++)
+    {
+        for(Block& value: outputMatrix[i])
+        {
+            int j = value.j;
+            writefile.write((char*) &i,4);
+            writefile.write((char*) &j,4);
+            for(int row=0;row<m;row++)
+            {
+                for(int col=0;col<m;col++)
+                {
+                    writefile.write((char*) &(value.block[row][col]),bytesize);
+                }
+            }
+
+        }
+    }
+    writefile.close();
+
 }
