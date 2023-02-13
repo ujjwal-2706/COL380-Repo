@@ -49,6 +49,9 @@ int main(int argc,char* argv[])
         nonZeroBlocks += answer[i].size();
     }
     cout << "Value of Our k is : " << nonZeroBlocks << endl;
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end - start;
+    cout << "Processing time is : " << elapsed_seconds.count() << endl;
     MatrixDimension outputfullMatrix = readBinaryFile(argv[2],2);
     cout << "Value of Original k is : " << outputfullMatrix.k << endl;
     bool check = compareResults(answer,outputfullMatrix.matrix,outputfullMatrix.n,outputfullMatrix.m);
@@ -60,9 +63,7 @@ int main(int argc,char* argv[])
     {
         cout << "Something's wrong" << endl;
     }
-    end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    cout << "Finished in : " << elapsed_seconds.count() << endl;
+    
     return 0;
 }
 
@@ -126,46 +127,57 @@ MatrixDimension readBinaryFile(char* fileName,int bytesize)
 vector<vector<Block>> sparseMultiplication(vector<vector<Block>>& matrix,int n,int m)
 {
     vector<vector<Block>> answer(n/m,vector<Block>());
-    #pragma omp parallel for num_threads(4)
-    for(int i =0;i < n/m;i++)
+    // #pragma omp parallel for num_threads(128)
+    omp_set_num_threads(128);
+    #pragma omp parallel
     {
-        for(int k=i;k < n/m;k++)
+        #pragma omp single
         {
-            bool found = false;
-            int pointer1 = 0;
-            int pointer2 = 0;
-            Block temp(m,i,k);
-            while(pointer1 < matrix[i].size() && pointer2 < matrix[k].size())
+            for(int val =0;val < n/m;val++)
             {
-                if(matrix[i][pointer1].j == matrix[k][pointer2].j)
+                int i = val;
+                #pragma omp task
                 {
-                    found = true;
-                    for(int row =0;row < m;row++)
+                    for(int k=i;k < n/m;k++)
                     {
-                        for(int col =0;col < m;col++)
+                        bool found = false;
+                        int pointer1 = 0;
+                        int pointer2 = 0;
+                        Block temp(m,i,k);
+                        while(pointer1 < matrix[i].size() && pointer2 < matrix[k].size())
                         {
-                            for(int imm =0;imm < m;imm++)
+                            if(matrix[i][pointer1].j == matrix[k][pointer2].j)
                             {
-                                temp.block[row][col] = Outer(temp.block[row][col],Inner(matrix[i][pointer1].block[row][imm],matrix[k][pointer2].block[col][imm]));
-                                temp.block[row][col] = min(temp.block[row][col],(1<<16));
+                                found = true;
+                                for(int row =0;row < m;row++)
+                                {
+                                    for(int col =0;col < m;col++)
+                                    {
+                                        for(int imm =0;imm < m;imm++)
+                                        {
+                                            temp.block[row][col] = Outer(temp.block[row][col],Inner(matrix[i][pointer1].block[row][imm],matrix[k][pointer2].block[col][imm]));
+                                            temp.block[row][col] = min(temp.block[row][col],(1<<16));
+                                        }
+                                    }
+                                }
+                                pointer1++;
+                                pointer2++;
+                            }
+                            else if(matrix[i][pointer1].j < matrix[k][pointer2].j)
+                            {
+                                pointer1++;
+                            }
+                            else
+                            {
+                                pointer2++;
                             }
                         }
+                        if(found)
+                        {
+                            answer[i].push_back(temp);
+                        }
                     }
-                    pointer1++;
-                    pointer2++;
                 }
-                else if(matrix[i][pointer1].j < matrix[k][pointer2].j)
-                {
-                    pointer1++;
-                }
-                else
-                {
-                    pointer2++;
-                }
-            }
-            if(found)
-            {
-                answer[i].push_back(temp);
             }
         }
     }
