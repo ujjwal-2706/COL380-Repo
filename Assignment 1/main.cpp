@@ -1,6 +1,6 @@
 #include<iostream>
 #include<fstream>
-#include<chrono>
+// #include<chrono>
 #include<vector>
 #include<algorithm>
 #include<omp.h>
@@ -33,15 +33,14 @@ struct MatrixDimension{
 };
 MatrixDimension readBinaryFile(char* fileName,int bytesize);
 vector<vector<Block>> sparseMultiplication(vector<vector<Block>>& matrix,int n,int m);
-bool compareResults(vector<vector<Block>> result,vector<vector<Block>> original,int n,int m);
 void writeBinaryFile(char* filename,int bytesize,vector<vector<Block>>& outputMatrix,int n,int m,int k);
 
 int main(int argc,char* argv[])
 {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
-    start = std::chrono::system_clock::now();
+    // std::chrono::time_point<std::chrono::system_clock> start, end;
+    // start = std::chrono::system_clock::now();
     MatrixDimension inputfullMatrix = readBinaryFile(argv[1],1);
-    cout << "Matrix initialzation in Block format done!" << endl;
+    // cout << "Matrix initialzation in Block format done!" << endl;
 
     vector<vector<Block>> answer = sparseMultiplication(inputfullMatrix.matrix,inputfullMatrix.n,inputfullMatrix.m);
     int nonZeroBlocks = 0;
@@ -49,22 +48,7 @@ int main(int argc,char* argv[])
     {
         nonZeroBlocks += answer[i].size();
     }
-    cout << "Value of Our k is : " << nonZeroBlocks << endl;
-    end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    cout << "Processing time is : " << elapsed_seconds.count() << endl;
-    MatrixDimension outputfullMatrix = readBinaryFile(argv[2],2);
-    cout << "Value of Original k is : " << outputfullMatrix.k << endl;
-    bool check = compareResults(answer,outputfullMatrix.matrix,outputfullMatrix.n,outputfullMatrix.m);
-    if(check)
-    {
-        cout << "Test Passed!" << endl;
-    }
-    else
-    {
-        cout << "Something's wrong" << endl;
-    }
-    writeBinaryFile("test1",2,answer,inputfullMatrix.n,inputfullMatrix.m,nonZeroBlocks);
+    writeBinaryFile(argv[2],2,answer,inputfullMatrix.n,inputfullMatrix.m,nonZeroBlocks);
     return 0;
 }
 
@@ -128,7 +112,7 @@ MatrixDimension readBinaryFile(char* fileName,int bytesize)
 vector<vector<Block>> sparseMultiplication(vector<vector<Block>>& matrix,int n,int m)
 {
     vector<vector<Block>> answer(n/m,vector<Block>());
-    omp_set_num_threads(128);
+    omp_set_num_threads(100);
     #pragma omp parallel
     {
         #pragma omp single
@@ -184,43 +168,6 @@ vector<vector<Block>> sparseMultiplication(vector<vector<Block>>& matrix,int n,i
     return answer;
 }
 
-bool compareResults(vector<vector<Block>> result,vector<vector<Block>> original,int n,int m)
-{
-    for(int i = 0;i < n/m;i++)
-    {
-        int pointer = 0;
-        while(pointer < original[i].size() && original[i][pointer].j < i)
-        {
-            pointer++;
-        }
-        int pointer1 = 0;
-        while(pointer1 < result[i].size() && pointer < original[i].size())
-        {
-            if(result[i][pointer1].j != original[i][pointer].j)
-            {
-                return false;
-            }
-            for(int row = 0;row < m;row++)
-            {
-                for(int col = 0;col < m;col++)
-                {
-                    if(result[i][pointer1].block[row][col] != original[i][pointer].block[row][col])
-                    {
-                        return false;
-                    }
-                }
-            }
-            pointer++;
-            pointer1++;
-        }
-        if(!(pointer == original[i].size() && pointer1 == result[i].size()))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 void writeBinaryFile(char* filename,int bytesize,vector<vector<Block>>& outputMatrix,int n,int m,int k)
 {
     ofstream writefile(filename,ios::out| ios::binary);
@@ -231,6 +178,7 @@ void writeBinaryFile(char* filename,int bytesize,vector<vector<Block>>& outputMa
     writefile.write((char*) &n,4);
     writefile.write((char*) &m,4);
     writefile.write((char*) &k,4);
+    // cout << k << " is k value\n";
     for(int i=0;i < outputMatrix.size();i++)
     {
         for(Block& value: outputMatrix[i])
