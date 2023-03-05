@@ -68,14 +68,18 @@ int main(int argc,char* argv[])
             int process = i%(size-1)+1;
             MPI_Send(&i,1,MPI_INT,process,process,MPI_COMM_WORLD);
             MPI_Send(&edgeCount[i],1,MPI_INT,process,process,MPI_COMM_WORLD);
+            int neighbours[edgeCount[i]];
+            int count = 0;
             for(int edge = 0;edge < graph[i].size();edge++)
             {
                 int neighbour = graph[i][edge];
                 if((degrees[i] < degrees[neighbour])|| (degrees[i] == degrees[neighbour] && i < neighbour))
                 {
-                    MPI_Send(&neighbour,1,MPI_INT,process,process,MPI_COMM_WORLD); // send the neighbour
+                    neighbours[count] = neighbour;
+                    count++;
                 }
             }
+            MPI_Send(neighbours,edgeCount[i],MPI_INT,process,process,MPI_COMM_WORLD); // send all edges simultaneously 
         }
     }
     else // other processes
@@ -93,11 +97,11 @@ int main(int argc,char* argv[])
             int vertexNumber =0,edgeCount = 0;
             MPI_Recv(&vertexNumber,1,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
             MPI_Recv(&edgeCount,1,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
+            int neighbours[edgeCount];
+            MPI_Recv(neighbours,edgeCount,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
             for(int edge = 0;edge < edgeCount ;edge++)
             {
-                int neighbour = -1;
-                MPI_Recv(&neighbour,1,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
-                subgraph[vertex].push_back(neighbour);
+                subgraph[vertex].push_back(neighbours[edge]);
                 edgeNumbers++;
             }
         }
@@ -105,6 +109,7 @@ int main(int argc,char* argv[])
         cout << "Vertices Received : "<< vertices << endl;
         cout << "Edges Received : " << edgeNumbers << endl;
         // now initialize trussities and start with the iterations
+        // first we count the triangles to initialize the values then we decrement untill the iteration converges
     }
     MPI_Finalize();
     return 0;
