@@ -4,7 +4,7 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-string INPUT = "./TestCases/test0/test-input-0.gra";
+string INPUT = "./TestCases/test4/test-input-4.gra";
 // we send node i data to i%(size-1) + 1 process
 int main(int argc,char* argv[])
 {
@@ -88,34 +88,55 @@ int main(int argc,char* argv[])
             }
             MPI_Send(neighbours,edgeCount[i],MPI_INT,process,process,MPI_COMM_WORLD); // send all edges simultaneously 
         }
-        // now we will do the triangle enumeration loop by storing the count table from each process 1 to size-1
-        int triangleEnumCount[size][size-1] {}; // ij element means that ith process wants to send j+1 th process pij elements
         MPI_Status status;
-        for(int i =0;i < size-1;i++)
+        // now we will do the triangle enumeration loop by storing the count table from each process 1 to size-1
+        for(int i=0;i<size-1;i++) // send to ith by collecting all from jth
         {
-            MPI_Recv(triangleEnumCount[i+1],size-1,MPI_INT,i+1,i+1,MPI_COMM_WORLD,&status);
-        }
-        // triangle count received
-        cout << "Triangle Count Received!\n";
-        for(int j =1;j<size;j++)
-        {
-            int process_j[size-1] {};
-            for(int i =1;i<size;i++)
+            vector<int> triangle_to_ith;
+            for(int j =0;j < size-1;j++)
             {
-                process_j[i-1] = triangleEnumCount[i][j-1];
+                if(j != i)
+                {
+                    int triangle_count;
+                    MPI_Recv(&triangle_count,1,MPI_INT,j+1,j+1,MPI_COMM_WORLD,&status);
+                    vector<int> triangle_from_jth(triangle_count,-1);
+                    MPI_Recv(triangle_from_jth.data(),triangle_count,MPI_INT,j+1,j+1,MPI_COMM_WORLD,&status);
+                    triangle_to_ith.insert(triangle_to_ith.end(),triangle_from_jth.begin(),triangle_from_jth.end());
+                }
             }
-            MPI_Send(process_j,size-1,MPI_INT,j,j,MPI_COMM_WORLD); // all data of process j sent to process j
+            int triangle_send = triangle_to_ith.size();
+            MPI_Send(&triangle_send,1,MPI_INT,i+1,i+1,MPI_COMM_WORLD);
+            MPI_Send(triangle_to_ith.data(),triangle_send,MPI_INT,i+1,i+1,MPI_COMM_WORLD);
         }
-        cout << "Sending done by process 0\n";
+
+        for(int i=0;i<size-1;i++) // send to ith by collecting all from jth
+        {
+            vector<int> triangle_to_ith;
+            for(int j =0;j < size-1;j++)
+            {
+                if(j != i)
+                {
+                    int triangle_count;
+                    MPI_Recv(&triangle_count,1,MPI_INT,j+1,j+1,MPI_COMM_WORLD,&status);
+                    vector<int> triangle_from_jth(triangle_count,-1);
+                    MPI_Recv(triangle_from_jth.data(),triangle_count,MPI_INT,j+1,j+1,MPI_COMM_WORLD,&status);
+                    triangle_to_ith.insert(triangle_to_ith.end(),triangle_from_jth.begin(),triangle_from_jth.end());
+                }
+            }
+            int triangle_send = triangle_to_ith.size();
+            MPI_Send(&triangle_send,1,MPI_INT,i+1,i+1,MPI_COMM_WORLD);
+            MPI_Send(triangle_to_ith.data(),triangle_send,MPI_INT,i+1,i+1,MPI_COMM_WORLD);
+        }
+        
     }
     else // other processes
     {
-        int n=0;
-        int vertices = 0;
+        int n=0; // total vertices in graph
+        int vertices = 0; // vertices received by process
         MPI_Status status;
         MPI_Recv(&n,1,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
         vector<int> degrees(n,-1);
-        MPI_Recv(&degrees[0],n,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
+        MPI_Recv(degrees.data(),n,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
         MPI_Recv(&vertices,1,MPI_INT,0,rank,MPI_COMM_WORLD,&status); // received total number of vertices
         map<int,vector<int>> subgraph; // store in form of adjacency list
         map<pair<int,int>,int> trusscity; // store initial trusscity value of each edge
@@ -136,7 +157,7 @@ int main(int argc,char* argv[])
             }
         }
         // graph distribution done and degrees also sent
-        cout << "degree valu is : " << degrees[10] << endl;
+        cout << "degree value is : " << degrees[10] << endl;
         cout << "Vertices Received : "<< vertices << endl;
         cout << "Edges Received : " << edgeNumbers << endl;
         // now initialize trussities and start with the iterations
@@ -152,50 +173,118 @@ int main(int argc,char* argv[])
                     {
                         // send the triangle to adjList[i]'s process which is adjList[i]%(size-1)+1
                         vector<int>& triangle = triangles[adjList[i]%(size-1)];
-                        triangle.push_back(node.first);
-                        triangle.push_back(adjList[i]);
-                        triangle.push_back(adjList[j]); // 1 full triangle pushed (check i j)
+                        if(adjList[i]%(size-1)+1 == rank) // triangle in same process
+                        {
+                            if(trusscity.count(make_pair(adjList[i],adjList[j]))>0)
+                            {
+                                trusscity[make_pair(node.first,adjList[i])]++;
+                                trusscity[make_pair(node.first,adjList[j])]++;
+                                trusscity[make_pair(adjList[i],adjList[j])]++;
+                            }
+                        }
+                        else
+                        {
+                            triangle.push_back(node.first);
+                            triangle.push_back(adjList[i]);
+                            triangle.push_back(adjList[j]); // 1 full triangle pushed (check i j)
+                        }
                     }
                     else
                     {
                         vector<int>& triangle = triangles[adjList[j]%(size-1)];
-                        triangle.push_back(node.first);
-                        triangle.push_back(adjList[j]); // 1 full triangle pushed (chech j i)
-                        triangle.push_back(adjList[i]);
+                        if(adjList[j]%(size-1)+1 == rank) // triangle in same process
+                        {
+                            if(trusscity.count(make_pair(adjList[j],adjList[i]))>0)
+                            {
+                                trusscity[make_pair(node.first,adjList[i])]++;
+                                trusscity[make_pair(node.first,adjList[j])]++;
+                                trusscity[make_pair(adjList[j],adjList[i])]++;
+                            }
+                        }
+                        else
+                        {
+                            triangle.push_back(node.first);
+                            triangle.push_back(adjList[j]);
+                            triangle.push_back(adjList[i]); // 1 full triangle pushed (check j i)
+                        }
                     }
                 }
             }
         }
         // now we send these triangles count to coordinator process
-        int countTriangleEnum [size-1] {};
-        for(int i =0;i < size-1;i++)
+        vector<int> initial_triangle_updation;
+        for(int j =0;j <size-1;j++)
         {
-            countTriangleEnum[i] = triangles[i].size();
-        }
-        MPI_Send(countTriangleEnum,size-1,MPI_INT,0,rank,MPI_COMM_WORLD); // data sent
-        int updationCount[size-1];
-        MPI_Recv(updationCount,size-1,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
-        cout << "Receiving done!\n";
-        for(int i =0;i< size-1;i++)
-        {
-            if(i+1 != rank)
+            if(j+1 != rank) // we send triangles
             {
-                MPI_Send(triangles[i].data(),countTriangleEnum[i],MPI_INT,i+1,i+1,MPI_COMM_WORLD);
+                int triangle_count = triangles[j].size();
+                MPI_Send(&triangle_count,1,MPI_INT,0,rank,MPI_COMM_WORLD);
+                vector<int>& triangle = triangles[j];
+                MPI_Send(triangle.data(),triangle_count,MPI_INT,0,rank,MPI_COMM_WORLD);
+            }
+            else // we receive triangles
+            {
+                int triangle_received = -1;
+                MPI_Recv(&triangle_received,1,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
+                vector<int> triangles_to_update(triangle_received,-1);
+                MPI_Recv(triangles_to_update.data(),triangle_received,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
+                initial_triangle_updation.insert(initial_triangle_updation.end(),triangles_to_update.begin(),triangles_to_update.end());
             }
         }
-        // sending to data done now receive first from the coordinator then update
-        vector<vector<int>> updationTriangles;
-        vector<vector<int>> replyTriangles(size-1,vector<int>()); // we keep track of updated triangles here and send them back 
-        for(int i =1;i<size;i++)
+        triangles.clear(); // free up space
+        cout << "Triangles received by :" << rank << " are "<< initial_triangle_updation.size() << endl;
+        vector<vector<int>> segregate_updation(size-1,vector<int>()); // segregate which updation sent to which process
+        for(int i =0;i <initial_triangle_updation.size();i+=3)
         {
-            if(i!= rank)
+            vector<int> update_triangle = {initial_triangle_updation[i],initial_triangle_updation[i+1],initial_triangle_updation[i+2]};
+            if(trusscity.count(make_pair(update_triangle[1],update_triangle[2]))>0) // update
             {
-                vector<int> process_i_triangle(updationCount[i-1]);
-                MPI_Recv(process_i_triangle.data(),updationCount[i-1],MPI_INT,i,i,MPI_COMM_WORLD,&status);
-                updationTriangles.push_back(process_i_triangle);
+                trusscity[make_pair(update_triangle[1],update_triangle[2])]++;
+                update_triangle.push_back(1); // means true
+            }
+            else
+            {
+                update_triangle.push_back(0); // false
+            }
+            int process = initial_triangle_updation[0]%(size-1);
+            segregate_updation[process].insert(segregate_updation[process].end(),update_triangle.begin(),update_triangle.end()); 
+        }
+        initial_triangle_updation.clear();
+        for(int j =0;j <size-1;j++)
+        {
+            if(j+1 != rank) // we send triangles
+            {
+                int triangle_count = segregate_updation[j].size();
+                MPI_Send(&triangle_count,1,MPI_INT,0,rank,MPI_COMM_WORLD);
+                vector<int>& triangle = segregate_updation[j];
+                MPI_Send(triangle.data(),triangle_count,MPI_INT,0,rank,MPI_COMM_WORLD);
+            }
+            else // we receive triangles
+            {
+                int triangle_received = -1;
+                MPI_Recv(&triangle_received,1,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
+                vector<int> triangles_to_update(triangle_received,-1);
+                MPI_Recv(triangles_to_update.data(),triangle_received,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
+                initial_triangle_updation.insert(initial_triangle_updation.end(),triangles_to_update.begin(),triangles_to_update.end());
             }
         }
-        // have'nt taken care of triangle updation in same process
+        // finally we update the triangles as received
+        for(int i=0;i < initial_triangle_updation.size();i+=4)
+        {
+            vector<int> triangle = {initial_triangle_updation[i],initial_triangle_updation[i+1],initial_triangle_updation[i+2],initial_triangle_updation[i+3]};
+            if(triangle[3] == 1) // do updation of uv and uw
+            {
+                trusscity[make_pair(triangle[0],triangle[1])]++;
+                trusscity[make_pair(triangle[0],triangle[2])]++;
+            }
+        }
+        initial_triangle_updation.clear();
+        // triangle updation phase complete
+        for(auto node : trusscity)
+        {
+            cout << "Trusscity of : " << node.first.first << " and "<< node.first.second << " is : " << trusscity[node.first] << endl;   
+        }
+        // now need to handle same edge counted multiple times in case both ends of same process
     }
     MPI_Finalize();
     return 0;
