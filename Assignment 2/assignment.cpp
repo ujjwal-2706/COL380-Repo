@@ -31,7 +31,7 @@ int main(int argc,char* argv[])
             degrees[node] = degree;
             for(int edge = 0; edge<degree;edge++)
             {
-                int neighbour = 0;
+                int neighbour = -1;
                 input.read((char*) &neighbour,4);
                 graph[node].push_back(neighbour); // as given in neighbours form
             }
@@ -41,7 +41,7 @@ int main(int argc,char* argv[])
         for(int i =0;i < size-1;i++)
         {
             MPI_Send(&n,1,MPI_INT,i+1,i+1,MPI_COMM_WORLD);
-            MPI_Send(&degrees[0],n,MPI_INT,i+1,i+1,MPI_COMM_WORLD);
+            MPI_Send(degrees.data(),n,MPI_INT,i+1,i+1,MPI_COMM_WORLD);
         }
 
         // now we need to do pre processing to send the data about edges to different processes
@@ -138,7 +138,7 @@ int main(int argc,char* argv[])
         vector<int> degrees(n,-1);
         MPI_Recv(degrees.data(),n,MPI_INT,0,rank,MPI_COMM_WORLD,&status);
         MPI_Recv(&vertices,1,MPI_INT,0,rank,MPI_COMM_WORLD,&status); // received total number of vertices
-        map<int,vector<int>> subgraph; // store in form of adjacency list
+        map<int,vector<int>> subgraph; // store in form of adjacency list each edge included once only
         map<pair<int,int>,int> trusscity; // store initial trusscity value of each edge
         int edgeNumbers = 0;
         for(int vertex = 0;vertex < vertices;vertex++)
@@ -152,12 +152,11 @@ int main(int argc,char* argv[])
             for(int edge = 0;edge < edgeCount ;edge++)
             {
                 subgraph[vertexNumber].push_back(neighbours[edge]);
-                trusscity[make_pair(vertex,neighbours[edge])] = 2; // 2 will be the value initially
+                trusscity[make_pair(vertexNumber,neighbours[edge])] = 2; // 2 will be the value initially
                 edgeNumbers++;
             }
         }
         // graph distribution done and degrees also sent
-        cout << "degree value is : " << degrees[10] << endl;
         cout << "Vertices Received : "<< vertices << endl;
         cout << "Edges Received : " << edgeNumbers << endl;
         // now initialize trussities and start with the iterations
@@ -246,7 +245,7 @@ int main(int argc,char* argv[])
             {
                 update_triangle.push_back(0); // false
             }
-            int process = initial_triangle_updation[0]%(size-1);
+            int process = update_triangle[0]%(size-1);
             segregate_updation[process].insert(segregate_updation[process].end(),update_triangle.begin(),update_triangle.end()); 
         }
         initial_triangle_updation.clear();
@@ -280,9 +279,9 @@ int main(int argc,char* argv[])
         }
         initial_triangle_updation.clear();
         // triangle updation phase complete
-        for(auto node : trusscity)
+        for(auto node: trusscity)
         {
-            cout << "Trusscity of : " << node.first.first << " and "<< node.first.second << " is : " << trusscity[node.first] << endl;   
+            cout << "Truss value for : " << rank << " is : " << node.first.first << " " << node.first.second<< " "<<node.second<< endl; 
         }
         // now need to handle same edge counted multiple times in case both ends of same process
     }
