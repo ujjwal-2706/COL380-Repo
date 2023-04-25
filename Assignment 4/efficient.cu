@@ -1,13 +1,14 @@
 #include <iostream>
-#include <cuda.h>
+#include <cuda_runtime.h>
 #include <thrust/sort.h>
 #include <fstream>
+#include <vector>
 using namespace std;
 
 struct Block4
 {
     unsigned int i,j;
-    unsigned int blockValue[4][4] = {0};
+    unsigned int blockValue[16] = {0};
     bool found = false;
     __host__ __device__
     Block4() = default;
@@ -27,57 +28,6 @@ struct BlockComparator4{
     } 
 };
 
-// __global__ 
-// void matrix_element_count(Block4* sparse, Block4* transpose,int* prefix_sum_sparse,int* num_elements_sparse,
-//     int* prefix_sum_transpose,int* num_elements_transpose,int* n_val,int* m_val,int* counter)
-// {
-//     int n = *n_val;
-//     int m = *m_val;
-//     int row = blockIdx.x * blockDim.x + threadIdx.x;
-//     int col = blockIdx.y * blockDim.y + threadIdx.y;
-//     if(row < n/m && col < n/m)
-//     {
-//         Block4 answer;
-//         unsigned int value[4][4] {0};
-//         int pointer1 = 0,pointer2=0;
-//         int start1= prefix_sum_sparse[row];
-//         int start2= prefix_sum_transpose[col];
-//         while(pointer1 < num_elements_sparse[row] && pointer2 < num_elements_transpose[col])
-//         {
-//             if(sparse[start1+pointer1].j == transpose[start2+pointer2].j)
-//             {
-//                 for(int i = 0;i < 4;i++)
-//                 {
-//                     for(int j = 0;j < 4;j++)
-//                     {
-//                         for(int k =0;k < 4;k++)
-//                         {
-//                             long long temp = 4294967295;
-//                             long long spa = sparse[start1+pointer1].blockValue[i][k];
-//                             long long trans = transpose[start2+pointer2].blockValue[j][k];
-//                             long long temp2 = value[i][j];
-//                             trans = trans*spa + temp2;
-//                             value[i][j] = thrust::min(temp,trans);
-//                         }
-//                     }
-//                 }
-//                 pointer1++;
-//                 pointer2++;
-//             }
-//             else if(sparse[start1+pointer1].j < transpose[start2+pointer2].j) pointer1++;
-//             else pointer2++;
-//         }
-//         bool found = false;
-//         for(int i =0;i < 4;i++)
-//         {
-//             for(int j = 0;j< 4;j++)
-//             {
-//                 if(value[i][j] > 0) found = true;
-//             }
-//         }
-//         if(found) addAtomic(counter,1);
-//     }
-// }
 __global__
 void matrix_multiplication(Block4* sparse,Block4* transpose,Block4* result,int* prefix_sum_sparse,
     int* num_elements_sparse,int* prefix_sum_transpose,int* num_elements_transpose,int* n_val,int* m_val)
@@ -103,10 +53,10 @@ void matrix_multiplication(Block4* sparse,Block4* transpose,Block4* result,int* 
                     {
                         for(int k =0;k < 4;k++)
                         {
-                            long long temp = 4294967295;
-                            long long spa = sparse[start1+pointer1].blockValue[i][k];
-                            long long trans = transpose[start2+pointer2].blockValue[j][k];
-                            long long temp2 = value[i][j];
+                            unsigned long long temp = 4294967295;
+                            unsigned long long spa = sparse[start1+pointer1].blockValue[4*i+k];
+                            unsigned long long trans = transpose[start2+pointer2].blockValue[4*j+k];
+                            unsigned long long temp2 = value[i][j];
                             trans = trans*spa + temp2;
                             value[i][j] = thrust::min(temp,trans);
                         }
@@ -124,12 +74,13 @@ void matrix_multiplication(Block4* sparse,Block4* transpose,Block4* result,int* 
             for(int j = 0;j< 4;j++)
             {
                 if(value[i][j] > 0) found = true;
+                printf("%u ",value[i][j]);
             }
         }
         if(found)
         {
             answer.i = row;answer.j = col;
-            for(int i =0;i < 15;i++) answer.blockValue[i>>2][i&3] = value[i>>2][i&3];
+            for(int i =0;i < 16;i++) answer.blockValue[i] = value[i>>2][i&3];
             answer.found = true;
             printf("Matrix done multiplying\n");
         }
@@ -139,6 +90,7 @@ void matrix_multiplication(Block4* sparse,Block4* transpose,Block4* result,int* 
 
 void readInput4(ifstream& readFile,Block4* matrix,unsigned int k);
 void readInputTranspose4(ifstream& readFile, Block4* matrix,unsigned int k);
+void writeFile4(vector<Block4>& blocks_output,unsigned int k,unsigned int n,unsigned int m,string output_file);
 
 int main(int argc, char* argv[]) {
 
@@ -221,10 +173,6 @@ int main(int argc, char* argv[]) {
     dim3 block(16,16,1);
     /*kernel grid and blocks set*/
 
-    // int* counter;
-    // cudaMalloc((void**) &counter,sizeof(int));
-    // int count = 0;
-    // cudaMemcpy(counter,&count,sizeof(int),cudaMemcpyHostToDevice);
     int host_n = n;
     int host_m = m;
     int* device_n;int* device_m;
@@ -232,21 +180,19 @@ int main(int argc, char* argv[]) {
     cudaMalloc((void**)&device_m ,sizeof(int));
     cudaMemcpy(device_n, &host_n, sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(device_m,&host_m,sizeof(int),cudaMemcpyHostToDevice);
-    // matrix_element_count(d_matrix1,d_matrix2,d_prefix_sum_sparse,d_num_elements_sparse,d_prefix_sum_transpose,
-    //     d_num_elements_transpose,device_n,device_m,counter);
-    // cudaMemcpy(&count,counter,sizeof(int),cudaMemcpyDeviceToHost);
+
     Block4* result;
     cudaMalloc((void**) &result, (n/m)*(n/m)*sizeof(Block4));
-    // int count2 = count;
-    // count = 0;
-    // cudaMemcpy(&count,counter,sizeof(int),cudaMemcpyDeviceToHost);
+   
     matrix_multiplication<<<grid,block>>>(d_matrix1,d_matrix2,result,d_prefix_sum_sparse,d_num_elements_sparse
         ,d_prefix_sum_transpose,d_num_elements_transpose,device_n,device_m);
-    cout << "finally done \n";
     Block4* final_answer;
     final_answer = (Block4*) malloc((n/m)*(n/m)*sizeof(Block4));
     cudaMemcpy(final_answer,result, (n/m)*(n/m)*sizeof(Block4), cudaMemcpyDeviceToHost);
-    int total_elements = 0;
+    cout << "finally done \n";
+    unsigned int total_elements = 0;
+    printf("%u \n",final_answer[0].blockValue[15]);
+    vector<Block4> blocks_output;
     for(int row = 0;row < (n/m);row++)
     {
         for(int col =0;col < (n/m);col++)
@@ -254,18 +200,13 @@ int main(int argc, char* argv[]) {
             if(final_answer[row*(n/m)+col].found)
             {
                 total_elements++;
-                for(int i = 0;i < 4;i++)
-                {
-                    for(int j = 0;j < 4;j++)
-                    {
-                        cout << final_answer[row*(n/m)+col].blockValue[i][j] << " ";
-                    }
-                    cout << endl;
-                }
+                blocks_output.push_back(final_answer[row*(n/m)+col]);
             }
         }
     }
     cout << total_elements << endl;
+    string output_name = argv[3];
+    writeFile4(blocks_output,total_elements,n,m,output_name);
     free(final_answer);
     cudaFree(result);
     cudaFree(device_n);
@@ -279,7 +220,6 @@ int main(int argc, char* argv[]) {
     cudaFree(d_num_elements_sparse);
     cudaFree(d_prefix_sum_transpose);
     cudaFree(d_num_elements_transpose);
-    // cudaFree(counter);
     return 0;
 }
 
@@ -297,7 +237,7 @@ void readInput4(ifstream& readFile,Block4* matrix,unsigned int k)
         {
             unsigned int number = 0;
             readFile.read((char*) &number,2);
-            matrix_block.blockValue[value>>2][value & 3] = number;
+            matrix_block.blockValue[value] = number;
         }
         matrix[block] = matrix_block;
     }
@@ -319,7 +259,7 @@ void readInputTranspose4(ifstream& readFile, Block4* matrix,unsigned int k)
         {
             unsigned int number = 0;
             readFile.read((char*) &number,2);
-            matrix_block.blockValue[value & 3][value >> 2] = number;
+            matrix_block.blockValue[(value & 3)*4 + (value >> 2)] = number;
         }
         matrix[block] = matrix_block;
     }
@@ -327,6 +267,31 @@ void readInputTranspose4(ifstream& readFile, Block4* matrix,unsigned int k)
     thrust::sort(matrix,matrix+k,BlockComparator4());
 }
 
+void writeFile4(vector<Block4>& blocks_output,unsigned int k,unsigned int n,unsigned int m,string output_file)
+{
+    ofstream writefile(output_file,ios::out|ios::binary);
+    if(!writefile)
+    {
+        cout << "Cannot open write file!" << endl;
+    }
+    writefile.write((char*) &n,4);
+    writefile.write((char*) &m,4);
+    writefile.write((char*) &k,4);
+    for(int block = 0;block < blocks_output.size();block++)
+    {
+        Block4& elements = blocks_output[block];
+        unsigned int i = elements.i;
+        unsigned int j = elements.j;
+        writefile.write((char*) &i,4);
+        writefile.write((char*) &j,4);
+        for(int val = 0;val < 16;val++)
+        {
+            unsigned int value = elements.blockValue[val];
+            writefile.write((char*) &value,4);
+        }
+    }
+    writefile.close();
+}
 /* here we have in total of N*N threads and each one is evaluating row,col element
  and they do so by for a given thread, in each iteration it loads the common piece of data of 16*16 submatrix
  then they multiply them together to store it in sum then finally update the C array
@@ -334,3 +299,6 @@ void readInputTranspose4(ifstream& readFile, Block4* matrix,unsigned int k)
 /*Can save memory from short instead of unsigned int */
 
 /*Can assign full memory in GPU but only transfer partial in CPU */
+
+
+// Value changing for 2^32-1 on copy back!!!!!!!!!!!!!!!!
