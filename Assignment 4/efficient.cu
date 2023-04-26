@@ -10,14 +10,16 @@ struct Block4
     unsigned int i,j;
     unsigned int blockValue[16] = {0};
     bool found = false;
-    Block4(){}
+    __host__ __device__
+    Block4() = default;
 };
 struct Block8
 {
     unsigned int i,j;
     unsigned int blockValue[64] = {0};
     bool found = false;
-    Block8(){}
+    __host__ __device__
+    Block8() = default;
 };
 struct BlockComparator4{
     bool operator()(const Block4& block1,const Block4& block2)
