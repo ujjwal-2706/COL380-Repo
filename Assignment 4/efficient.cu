@@ -7,17 +7,17 @@ using namespace std;
 
 struct Block4
 {
+    bool found = false;
     unsigned int i,j;
     unsigned int blockValue[16] = {0};
-    bool found = false;
     __host__ __device__
     Block4() = default;
 };
 struct Block8
 {
+    bool found = false;
     unsigned int i,j;
     unsigned int blockValue[64] = {0};
-    bool found = false;
     __host__ __device__
     Block8() = default;
 };
@@ -164,6 +164,8 @@ void writeFile8(vector<Block8>& blocks_output,unsigned int k,unsigned int n,unsi
 int main(int argc, char* argv[]) {
 
     /*File Reading and parallel device transfer begins*/
+    cout << "Size of Block4 is : " << sizeof(Block4) << endl;
+    cout << "Size of Block8 is : " << sizeof(Block8) << endl;
     ifstream readfile(argv[1], ios::out | ios::binary);
     if(!readfile) 
     {
