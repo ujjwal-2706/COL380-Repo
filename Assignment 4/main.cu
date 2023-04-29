@@ -164,8 +164,8 @@ void writeFile8(vector<Block8>& blocks_output,unsigned int k,unsigned int n,unsi
 int main(int argc, char* argv[]) {
 
     /*File Reading and parallel device transfer begins*/
-    cout << "Size of Block4 is : " << sizeof(Block4) << endl;
-    cout << "Size of Block8 is : " << sizeof(Block8) << endl;
+    // cout << "Size of Block4 is : " << sizeof(Block4) << endl;
+    // cout << "Size of Block8 is : " << sizeof(Block8) << endl;
     ifstream readfile(argv[1], ios::out | ios::binary);
     if(!readfile) 
     {
@@ -174,7 +174,7 @@ int main(int argc, char* argv[]) {
     }
     unsigned int n1=0,m1=0,k1=0;
     readfile.read((char*) &n1,4);readfile.read((char*) &m1,4);readfile.read((char*) &k1,4);
-    cout << n1 << " " << m1 << " " << k1 << endl;
+    // cout << n1 << " " << m1 << " " << k1 << endl;
     if(m1 == 4 )
     {
         Block4* matrix1 = (Block4*) malloc(k1*sizeof(Block4));
@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
         }
         unsigned int n2=0,m2=0,k2=0;
         readfile2.read((char*) &n2,4);readfile2.read((char*) &m2,4);readfile2.read((char*) &k2,4);
-        cout << n2 << " " << m2 << " " << k2 << endl;
+        // cout << n2 << " " << m2 << " " << k2 << endl;
         Block4* matrix2 = (Block4*) malloc(k2*sizeof(Block4));
         
         Block4* d_matrix1;
@@ -262,9 +262,9 @@ int main(int argc, char* argv[]) {
         Block4* final_answer;
         final_answer = (Block4*) malloc((n/m)*(n/m)*sizeof(Block4));
         cudaMemcpy(final_answer,result, (n/m)*(n/m)*sizeof(Block4), cudaMemcpyDeviceToHost);
-        cout << "finally done \n";
+        // cout << "finally done \n";
         unsigned int total_elements = 0;
-        printf("%u \n",final_answer[0].blockValue[15]);
+        // printf("%u \n",final_answer[0].blockValue[15]);
         vector<Block4> blocks_output;
         for(int row = 0;row < (n/m);row++)
         {
@@ -277,7 +277,7 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-        cout << total_elements << endl;
+        // cout << total_elements << endl;
         string output_name = argv[3];
         writeFile4(blocks_output,total_elements,n,m,output_name);
         free(final_answer);
@@ -307,7 +307,7 @@ int main(int argc, char* argv[]) {
         }
         unsigned int n2=0,m2=0,k2=0;
         readfile2.read((char*) &n2,4);readfile2.read((char*) &m2,4);readfile2.read((char*) &k2,4);
-        cout << n2 << " " << m2 << " " << k2 << endl;
+        // cout << n2 << " " << m2 << " " << k2 << endl;
         Block8* matrix2 = (Block8*) malloc(k2*sizeof(Block8));
         
         Block8* d_matrix1;
@@ -381,9 +381,9 @@ int main(int argc, char* argv[]) {
         Block8* final_answer;
         final_answer = (Block8*) malloc((n/m)*(n/m)*sizeof(Block8));
         cudaMemcpy(final_answer,result, (n/m)*(n/m)*sizeof(Block8), cudaMemcpyDeviceToHost);
-        cout << "finally done \n";
+        // cout << "finally done \n";
         unsigned int total_elements = 0;
-        printf("%u \n",final_answer[0].blockValue[15]);
+        // printf("%u \n",final_answer[0].blockValue[15]);
         vector<Block8> blocks_output;
         for(int row = 0;row < (n/m);row++)
         {
@@ -396,7 +396,7 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-        cout << total_elements << endl;
+        // cout << total_elements << endl;
         string output_name = argv[3];
         writeFile8(blocks_output,total_elements,n,m,output_name);
         free(final_answer);
